@@ -4,6 +4,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 from statsmodels.tsa.seasonal import seasonal_decompose
+from statsmodels.tsa.stattools import adfuller
+from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
+from statsmodels.tsa.statespace.sarimax import SARIMAX
 
 def create_periodic_df(filepath, company):
     """
@@ -62,19 +65,19 @@ def create_periodic_plots(company, h_df,d_df,w_df,m_df, options=['Hourly', 'Dail
 
     for option in options:
         if option == 'Hourly':
-          fig, axs = plt.subplots(1, 3, figsize=(15, 5))
-          h_df[f"{company}_MW"].plot(ax=axs[0], title=f"Hourly {company} MW Load", rot=45)
-          h_df[f"Hourly_AVG_{company}_MW"].plot(ax=axs[1], title=f"Hourly Average {company} MW Load", rot=45)
-          h_df[f"Hourly_Median_{company}_MW"].plot(ax=axs[2], title=f"Hourly Median {company} MW Load", rot=45)
-          plt.tight_layout()
-          st.pyplot(fig)
+            fig, axs = plt.subplots(1, 3, figsize=(15, 5))
+            h_df[f"{company}_MW"].plot(ax=axs[0], title=f"Hourly {company} MW Load", rot=45)
+            h_df[f"Hourly_AVG_{company}_MW"].plot(ax=axs[1], title=f"Hourly Average {company} MW Load", rot=45)
+            h_df[f"Hourly_Median_{company}_MW"].plot(ax=axs[2], title=f"Hourly Median {company} MW Load", rot=45)
+            plt.tight_layout()
+            st.pyplot(fig)  
         elif option == 'Daily':
-          fig, axs = plt.subplots(1, 3, figsize=(15, 5))
-          d_df[f"Daily_{company}_MW"].plot(ax=axs[0], title=f'Daily Total {company} MW Load', rot=45)
-          d_df[f'Daily_AVG_{company}_MW'].plot(ax=axs[1], title=f'Daily Average {company} MW Load', rot=45)
-          d_df[f'Daily_Median_{company}_MW'].plot(ax=axs[2], title=f'Daily Median {company} MW Load', rot=45)
-          plt.tight_layout()
-          st.pyplot(fig)
+            fig, axs = plt.subplots(1, 3, figsize=(15, 5))
+            d_df[f"Daily_{company}_MW"].plot(ax=axs[0], title=f'Daily Total {company} MW Load', rot=45)
+            d_df[f'Daily_AVG_{company}_MW'].plot(ax=axs[1], title=f'Daily Average {company} MW Load', rot=45)
+            d_df[f'Daily_Median_{company}_MW'].plot(ax=axs[2], title=f'Daily Median {company} MW Load', rot=45)
+            plt.tight_layout()
+            st.pyplot(fig)
         elif option == 'Weekly':
             fig, axs = plt.subplots(1, 3, figsize=(15, 5))
             w_df[f"Weekly_{company}_MW"].plot(ax=axs[0], title=f'Weekly Total {company} MW Load', rot=45)
@@ -127,32 +130,8 @@ def create_seasonal_plots(decomposition):
     :param decomposition: acccepts a decomposition object
     :return: None
 
-    Creates a 4-row plot showing Observed Data, Trend Component, Seasonal Component, and Residuals.
+    Creates a 2-column plot showing Observed Data, Trend Component, Seasonal Component, and Residuals.
     """
-    # # Plot the Decomposition
-    # fig_s, (ax_s1, ax_s2, ax_s3, ax_s4) = plt.subplots(4, 1, figsize=(12, 10), sharex=True)
-    
-    # # Observed Data
-    # decomposition.observed.plot(ax=ax_s1, title=f'Observed Avg XXX', color='blue')
-    # ax_s1.set_ylabel('MW')
-    
-    # # Trend Component
-    # decomposition.trend.plot(ax=ax_s2, title='Long-Term Trend', color='red')
-    # ax_s2.set_ylabel('Trend (MW)')
-    
-    # # Seasonal Component
-    # decomposition.seasonal.plot(ax=ax_s3, title='Annual Seasonality Cycle', color='green')
-    # ax_s3.set_ylabel('Seasonal Factor')
-    
-    # # Residuals (Noise)
-    # decomposition.resid.plot(ax=ax_s4, title='Residuals (Noise)', color='purple')
-    # ax_s4.set_ylabel('Residual')
-    # ax_s4.set_xlabel('Time (Year)')
-    
-    # plt.suptitle('Time Series Decomposition Energy Consumption', y=1.02)
-    # plt.tight_layout()
-    # st.pyplot(fig_s)
-
     col1, col2 = st.columns(2)
     with col1:
         # # Observed Data
@@ -162,6 +141,7 @@ def create_seasonal_plots(decomposition):
         plt.tight_layout()
         st.pyplot(fig1)
 
+        # # Seasonal Component
         fig3, ax3 = plt.subplots(1, 1, figsize=(15, 5))
         decomposition.seasonal.plot(ax=ax3, title='Annual Seasonality Cycle', color='green')
         ax3.set_ylabel('Seasonal Factor')
@@ -169,12 +149,14 @@ def create_seasonal_plots(decomposition):
         st.pyplot(fig3)
 
     with col2:
+        # # Trend Component
         fig2, ax2 = plt.subplots(1, 1, figsize=(15, 5))
         decomposition.trend.plot(ax=ax2, title='Long-Term Trend', color='red')
         ax2.set_ylabel('Trend (MW)')
         plt.tight_layout()
         st.pyplot(fig2)
-
+        
+        # # Residuals (Noise)
         fig4, ax4 = plt.subplots(1, 1, figsize=(15, 5))
         decomposition.resid.plot(ax=ax4, title='Residuals (Noise)', color='purple')
         ax4.set_ylabel('Residual')
@@ -196,6 +178,79 @@ def list_files_folders(start_path):
         full_path = file
         file_paths.append(full_path)
     return file_paths
+
+def adf_test_and_interpret(timeseries, name='Time Series', signif=0.05):
+    """
+    Performs the ADF test and prints the results and interpretation.
+    """
+    st.subheader(f'--- ADF Test Results for {name} ---')
+    adf_result = adfuller(timeseries, autolag='AIC')
+
+    # Organize the results for a clean output
+    output = pd.Series(adf_result[0:4], index=['Test Statistic', 'p-value', 'Lags Used', 'Number of Observations'])
+    for key, value in adf_result[4].items():
+        output[f'Critical Value ({key})'] = value
+   
+    #st.write(output.to_string())
+    st.write(output)
+
+    # Interpret the results
+    if adf_result[1] <= signif:
+        st.markdown(f"**Conclusion:** Reject the Null Hypothesis (H0). The series is likely **STATIONARY** at the {signif*100}% level.")
+    else:
+        st.markdown(f"**Conclusion:** Fail to Reject the Null Hypothesis (H0). The series is **NON-STATIONARY** at the {signif*100}% level.")
+
+
+def create_acf_pacf_plots(monthly_df_double_diff):
+    """
+    Creates ACF and PACF plots for the provided DataFrame.
+    
+    :param monthly_df_double_diff: DataFrame containing the double differenced monthly data
+    :return: None
+    """
+    col1, col2 = st.columns(2)
+    with col1:
+        # ACF Plot
+        fig_acf = plot_acf(monthly_df_double_diff[f"Monthly_{company}_MW"], lags=48, title='Autocorrelation Function (ACF)')
+        plt.title("ACF Plot")
+        st.pyplot(fig_acf)
+
+    with col2:
+    # PACF Plot
+        fig_pacf = plot_pacf(monthly_df_double_diff[f"Monthly_{company}_MW"], lags=48, title='Partial Autocorrelation Function (PACF)')
+        plt.title("PACF Plot")
+        st.pyplot(fig_pacf)
+    st.write("ACF and PACF plots displayed.")
+
+def sarima_model(monthly_df, company):
+    # 1. Define the split point (e.g., reserve the last 12 months for testing)
+    split_date = monthly_df.index[-12]
+
+    # 2. Split the data
+    train = monthly_df.loc[monthly_df.index < split_date, f'Monthly_{company}_MW']
+    test = monthly_df.loc[monthly_df.index >= split_date, f'Monthly_{company}_MW']
+
+    st.write(f"Training data points: {len(train)}")
+    st.write(f"Testing data points: {len(test)}")
+
+    # Define the model order based on your analysis
+    order = (1, 1, 1)        # (p, d, q)
+    seasonal_order = (0, 1, 0, 12) # (P, D, Q, s)
+
+    # Fit the SARIMAX model
+    model = SARIMAX(
+        train,
+        order=order,
+        seasonal_order=seasonal_order,
+        enforce_stationarity=False,
+        enforce_invertibility=False
+    )
+
+    # Suppressing warnings with enforce=False is common for initial fitting
+    results = model.fit(disp=False)
+
+    st.write("\n--- Model Summary ---")
+    st.write(results.summary())
 
 ########################################
 # Streamlit App Starts Here
@@ -232,7 +287,10 @@ csv_file = st.sidebar.selectbox(
 company = csv_file.split('_')[0]
 
 st.header(f"Hourly Data for {company}")
-st.markdown(f"Here is a peek at the dataset for {csv_file} in tabular form.")
+st.markdown(f"""
+Here is a peek at the dataset for {csv_file} in tabular form. This dataset contains hourly energy consumption data for {company}.
+Power system data typically exhibits strong seasonal patterns, making it ideal for time series analysis.
+""")
 df, h_df, d_df, w_df, m_df = create_periodic_df(cwd + f"/Hourly_Energy_Consumption_Data/3/{csv_file}", company)
 st.dataframe(df)
 
@@ -246,11 +304,21 @@ st.markdown("You selected: " + ", ".join(options))
 create_periodic_plots(company, h_df, d_df, w_df, m_df, options)
 
 st.header(f"Seasonal Plots for {company} in Daily, Weekly, and Monthly")
-# Create a 2x2 grid of columns
+
 option2 = st.radio(
     'Select the periodicities you want to plot:',
     ['Daily', 'Weekly', 'Monthly']
 )
+
+st.markdown(f"""
+**Observed Plot:** This plot shows the raw MW consumption values over time.
+
+**Trend Plot:** This plot makes it easier to observe whether the MW consumption is growing or decreasing.
+
+**Seasonal Factor:** The effect of the time of year on the series. For AEP, this shows the recurring, predictable spikes in demand during summer and winter and the dips during shoulder seasons (spring and fall).
+            
+**Residual Plot:** The residual component, also called the irregular component, is what is left over after the trend and seasonal components have been removed from the observed data. The unpredictable, random, or erratic movement in the time series. This is the unexplained variation or noise.
+""")
 
 if option2 == 'Daily':
     st.subheader(f"Daily Seasonal Plots for {company}")
@@ -261,6 +329,62 @@ elif option2 == 'Weekly':
 elif option2 == 'Monthly':
     st.subheader(f"Monthly Seasonal Plots for {company}")
     create_seasonal_plots(decompose(m_df,f'Monthly_{company}_MW','ME'))
+
+st.markdown(f"""
+For our next step, we want to test Stationarity. Some models require stationarity.
+
+A stationary series is one whose statistical properties (mean, variance, and autocorrelation) do not change over time.
+
+Our Trend plot tells us that the MW Consumption is decreasing over time. This should tell us that the data is not stationary.
+
+Let's us confirm this by running some tests.
+""")
+
+st.header("Augmented Dickey-Fuller (ADF) test for Stationarity")
+st.write("A standard statistical test used to formally determine if a time series is stationary.")
+
+option3 = st.radio(
+    'Calculate the ADF test for which periodicity:',
+    ['Daily', 'Weekly', 'Monthly']
+)
+if option3 == 'Daily':
+    adf_test_and_interpret(d_df[f"Daily_{company}_MW"], name=f"Original Daily Total {company} Load")
+    adf_test_and_interpret(d_df[f"Daily_AVG_{company}_MW"], name=f"Original Daily Average {company} Load")
+    adf_test_and_interpret(d_df[f"Daily_Median_{company}_MW"], name=f"Original Daily Median {company} Load")
+elif option3 == 'Weekly':
+    adf_test_and_interpret(w_df[f"Weekly_{company}_MW"], name=f"Original Weekly Total {company} Load")
+    adf_test_and_interpret(w_df[f"Weekly_AVG_{company}_MW"], name=f"Original Weekly Average {company} Load")
+    adf_test_and_interpret(w_df[f"Weekly_Median_{company}_MW"], name=f"Original Weekly Median {company} Load")
+elif option3 == 'Monthly':
+    adf_test_and_interpret(m_df[f"Monthly_{company}_MW"], name=f"Original Monthly Total {company} Load")
+    adf_test_and_interpret(m_df[f"Monthly_AVG_{company}_MW"], name=f"Original Monthly Average {company} Load")
+    adf_test_and_interpret(m_df[f"Monthly_Median_{company}_MW"], name=f"Original Monthly Median {company} Load")
+
+st.header("Seasonal Differencing (D=1)")
+st.markdown(f"""
+This removes the strong annual pattern (the correlation between a month 
+and the same month last year). Since you have monthly data, the seasonal
+period (s) is 12.
+""")
+
+m_df_seasonal_diff = m_df.diff(periods=12).dropna()
+adf_test_and_interpret(m_df_seasonal_diff[f"Monthly_{company}_MW"], name=f'Original Monthly Total {company} Load')
+adf_test_and_interpret(m_df_seasonal_diff[f"Monthly_AVG_{company}_MW"], name=f'Original Monthly Average {company} Load')
+adf_test_and_interpret(m_df_seasonal_diff[f"Monthly_Median_{company}_MW"], name=f'Original Monthly Median {company} Load')
+
+st.header("Non-Seasonal Differencing (D=1)")
+m_df_double_diff = m_df_seasonal_diff.diff(periods=1).dropna()
+adf_test_and_interpret(m_df_double_diff[f"Monthly_{company}_MW"], name=f'Original Monthly Total {company} Load')
+adf_test_and_interpret(m_df_double_diff[f"Monthly_AVG_{company}_MW"], name=f'Original Monthly Average {company} Load')
+adf_test_and_interpret(m_df_double_diff[f"Monthly_Median_{company}_MW"], name=f'Original Monthly Median {company} Load')
+
+
+st.header("Autocorrelation Function (ACF) and Partial Autocorrelation Function (PACF) Plots")
+create_acf_pacf_plots(m_df_double_diff)
+
+st.header("SARIMA Model")
+sarima_model(m_df, company)
+
 
 # End of streamlist_app.py
 footer_html = """
